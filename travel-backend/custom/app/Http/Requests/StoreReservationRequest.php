@@ -41,37 +41,50 @@ class StoreReservationRequest extends FormRequest
 
     /**
      * Validation métier :
-     *  1. Au moins 1 adulte (≥ 12 ans).
-     *  2. Un mineur seul (12-17 ans) ne peut pas voyager sans adulte.
+     *  1. Au moins 1 adulte voyageur (≥ 12 ans).
+     *  2. Un mineur (12-17 ans) doit être accompagné d'un adulte majeur (≥ 18 ans).
      *  3. Un bébé (< 2 ans) ne peut pas avoir de siège propre.
      *  4. Maximum 6 passagers.
-     *  5. Nombre de bébés ≤ nombre d'adultes.
+     *  5. Nombre de bébés ≤ nombre d'adultes majeurs.
      */
     public function withValidator($validator): void
     {
         $validator->after(function ($v) {
             $passengers = collect($this->input('passengers', []));
 
+            // Voyageurs capables de voyager seuls (≥ 12 ans, inclut ados)
             $adultes = $passengers->filter(fn($p) =>
                 Carbon::parse($p['date_naissance'])->diffInYears(now()) >= 12
             );
+
+            // BUG 2 FIX: adultes majeurs réels pour les règles d'accompagnement
+            $adultesMajeurs = $passengers->filter(fn($p) =>
+                Carbon::parse($p['date_naissance'])->diffInYears(now()) >= 18
+            );
+
             $mineurs = $passengers->filter(fn($p) => {
                 $age = Carbon::parse($p['date_naissance'])->diffInYears(now());
                 return $age >= 12 && $age < 18;
             });
-            $bebes   = $passengers->filter(fn($p) =>
+
+            $bebes = $passengers->filter(fn($p) =>
                 Carbon::parse($p['date_naissance'])->diffInYears(now()) < 2
             );
 
+            // Règle A : au moins un voyageur de 12 ans ou plus
             if ($adultes->isEmpty()) {
                 $v->errors()->add('passengers', 'Au moins un passager adulte (≥ 12 ans) est requis.');
             }
 
-            if ($adultes->count() === 0 && $mineurs->count() > 0) {
-                $v->errors()->add('passengers', 'Un mineur ne peut pas voyager sans adulte.');
+            // Règle B : un mineur sans adulte majeur (≥ 18 ans)
+            // BUG 2 FIX: condition maintenant réalisable — $adultesMajeurs et $mineurs
+            // sont des ensembles distincts, pas imbriqués.
+            if ($adultesMajeurs->isEmpty() && $mineurs->isNotEmpty()) {
+                $v->errors()->add('passengers', 'Un mineur doit être accompagné d\'un adulte (18 ans ou plus).');
             }
 
-            if ($bebes->count() > $adultes->count()) {
+            // Règle C : bébés > adultes majeurs
+            if ($bebes->count() > $adultesMajeurs->count()) {
                 $v->errors()->add('passengers', 'Chaque bébé doit être accompagné d\'un adulte.');
             }
 
