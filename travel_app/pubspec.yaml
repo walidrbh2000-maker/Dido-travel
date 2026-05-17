@@ -1,0 +1,60 @@
+name: voyageur
+description: Application de voyage connectée à une API Laravel REST
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.8.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+
+  flutter_riverpod: ^2.5.1
+  riverpod_annotation: any
+
+  go_router: any
+
+  dio: ^5.0.0
+  retrofit: ^4.1.0
+
+  freezed_annotation: ^2.4.1
+  json_annotation: any
+
+  flutter_secure_storage: any
+  shared_preferences: any
+
+  shimmer: any
+  lottie: any
+  cached_network_image: any
+  flutter_svg: any
+  animations: any
+  flutter_animate: any
+  # smooth_page_indicator removed — replaced with custom OnboardingIndicator
+  # to avoid translateByDouble incompatibility with vector_math >= 2.1.4
+
+  form_validator: any
+
+  intl: any
+
+  logger: any
+  equatable: any
+  dartz: any
+  uuid: any
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: any
+  build_runner: ^2.4.0
+  freezed: ^2.4.1
+  json_serializable: ^6.7.1
+  riverpod_generator: any
+  custom_lint: any
+  riverpod_lint: any
+
+flutter:
+  generate: true
+  uses-material-design: true
