@@ -34,7 +34,17 @@ class HotelController extends Controller
 
     public function store(Request $request): JsonResponse
     {
-        $hotel = Hotel::create($request->all());
+        // BUG 3 FIX: validate instead of $request->all()
+        $hotel = Hotel::create($request->validate([
+            'nom'            => 'required|string|max:255',
+            'destination_id' => 'required|exists:destinations,id',
+            'etoiles'        => 'required|integer|min:1|max:5',
+            'prix_nuit'      => 'required|numeric|min:0',
+            'adresse'        => 'required|string|max:500',
+            'description'    => 'nullable|string',
+            'amenities'      => 'nullable|string',
+            'disponible'     => 'boolean',
+        ]));
 
         return response()->json([
             'message' => 'Hôtel créé avec succès',
@@ -49,7 +59,17 @@ class HotelController extends Controller
 
     public function update(Request $request, Hotel $hotel): JsonResponse
     {
-        $hotel->update($request->all());
+        // BUG 3 FIX: validate instead of $request->all()
+        $hotel->update($request->validate([
+            'nom'            => 'sometimes|string|max:255',
+            'destination_id' => 'sometimes|exists:destinations,id',
+            'etoiles'        => 'sometimes|integer|min:1|max:5',
+            'prix_nuit'      => 'sometimes|numeric|min:0',
+            'adresse'        => 'sometimes|string|max:500',
+            'description'    => 'nullable|string',
+            'amenities'      => 'nullable|string',
+            'disponible'     => 'sometimes|boolean',
+        ]));
 
         return response()->json([
             'message' => 'Hôtel mis à jour',

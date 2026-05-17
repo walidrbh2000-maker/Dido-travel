@@ -39,7 +39,18 @@ class VolController extends Controller
 
     public function store(Request $request): JsonResponse
     {
-        $vol = Vol::create($request->all());
+        // BUG 3 FIX: validate instead of $request->all()
+        $vol = Vol::create($request->validate([
+            'compagnie'          => 'required|string|max:255',
+            'numero_vol'         => 'required|string|max:255',
+            'destination_id'     => 'required|exists:destinations,id',
+            'date_depart'        => 'required|date',
+            'date_arrivee'       => 'required|date',
+            'prix'               => 'required|numeric|min:0',
+            'places_disponibles' => 'required|integer|min:0',
+            'classe'             => 'required|in:economique,affaires,premiere',
+            'statut'             => 'sometimes|in:programme,en_vol,atterri,annule',
+        ]));
 
         return response()->json([
             'message' => 'Vol créé avec succès',
@@ -54,7 +65,18 @@ class VolController extends Controller
 
     public function update(Request $request, Vol $vol): JsonResponse
     {
-        $vol->update($request->all());
+        // BUG 3 FIX: validate instead of $request->all()
+        $vol->update($request->validate([
+            'compagnie'          => 'sometimes|string|max:255',
+            'numero_vol'         => 'sometimes|string|max:255',
+            'destination_id'     => 'sometimes|exists:destinations,id',
+            'date_depart'        => 'sometimes|date',
+            'date_arrivee'       => 'sometimes|date',
+            'prix'               => 'sometimes|numeric|min:0',
+            'places_disponibles' => 'sometimes|integer|min:0',
+            'classe'             => 'sometimes|in:economique,affaires,premiere',
+            'statut'             => 'sometimes|in:programme,en_vol,atterri,annule',
+        ]));
 
         return response()->json([
             'message' => 'Vol mis à jour',

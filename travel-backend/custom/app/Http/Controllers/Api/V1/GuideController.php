@@ -9,6 +9,7 @@ use Illuminate\Http\Request;
 
 class GuideController extends Controller
 {
+    /** Liste publique — guides disponibles uniquement. */
     public function index(Request $request): JsonResponse
     {
         $query = Guide::with('destination');
@@ -23,6 +24,32 @@ class GuideController extends Controller
 
         $guides = $query->where('disponible', true)
             ->orderBy('experience_annees', 'desc')
+            ->paginate($request->integer('per_page', 15));
+
+        return response()->json($guides);
+    }
+
+    /**
+     * BUG 4 FIX — Liste admin : tous les guides, y compris les indisponibles.
+     * Accessible uniquement via le groupe de routes admin.
+     */
+    public function indexAdmin(Request $request): JsonResponse
+    {
+        $query = Guide::with('destination');
+
+        if ($request->filled('destination_id')) {
+            $query->where('destination_id', $request->destination_id);
+        }
+
+        if ($request->filled('langue')) {
+            $query->whereJsonContains('langues', $request->langue);
+        }
+
+        if ($request->filled('disponible')) {
+            $query->where('disponible', $request->boolean('disponible'));
+        }
+
+        $guides = $query->orderBy('experience_annees', 'desc')
             ->paginate($request->integer('per_page', 15));
 
         return response()->json($guides);
