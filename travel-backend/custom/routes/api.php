@@ -46,6 +46,10 @@ Route::prefix('v1')->group(function () {
 
         // ── Admin ─────────────────────────────────────────────────────────────
         Route::middleware('admin')->prefix('admin')->group(function () {
+            // BUG 4 FIX: explicit GET routes before apiResource so they take precedence
+            Route::get('guides',       [GuideController::class,       'indexAdmin']);
+            Route::get('reservations', [ReservationController::class, 'adminIndex']);
+
             Route::apiResource('destinations', DestinationController::class)
                 ->only(['store', 'update', 'destroy']);
             Route::apiResource('guides', GuideController::class)
