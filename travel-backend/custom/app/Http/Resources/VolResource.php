@@ -13,11 +13,15 @@ class VolResource extends JsonResource
             'id'                 => $this->id,
             'compagnie'          => $this->compagnie,
             'numero_vol'         => $this->numero_vol,
-            'destination'        => [
-                'id'      => $this->whenLoaded('destination')?->id,
-                'name'    => $this->whenLoaded('destination')?->name,
-                'country' => $this->whenLoaded('destination')?->country,
-            ],
+            // BUG 5 FIX: always include destination_id as a top-level scalar
+            'destination_id'     => $this->destination_id,
+            // BUG 5 FIX: omit the key entirely when destination is not loaded
+            // instead of sending {"id": null, "name": null, "country": null}
+            'destination'        => $this->whenLoaded('destination', fn ($d) => [
+                'id'      => $d->id,
+                'name'    => $d->name,
+                'country' => $d->country,
+            ]),
             'date_depart'        => $this->date_depart?->toIso8601String(),
             'date_arrivee'       => $this->date_arrivee?->toIso8601String(),
             'prix'               => (float) $this->prix,
