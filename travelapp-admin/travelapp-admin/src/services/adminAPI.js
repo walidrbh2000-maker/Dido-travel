@@ -1,7 +1,7 @@
 /**
  * adminAPI.js
  * Service API centralisé pour le dashboard admin TravelApp.
- * Cible le backend Laravel PHP via JWT.
+ * Cible le backend Laravel/PHP via JWT.
  *
  * Base URL : https://tiger-sudoku-tiara.ngrok-free.dev/api/v1
  */
@@ -28,7 +28,7 @@ function buildHeaders(extra = {}) {
   return {
     'Content-Type': 'application/json',
     Accept: 'application/json',
-    // Nécessaire pour ngrok (évite la page d'avertissement)
+    // Nécessaire pour ngrok — évite la page d'avertissement interstitielle
     'ngrok-skip-browser-warning': 'true',
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
     ...extra,
@@ -40,40 +40,65 @@ async function request(method, path, body = null) {
     method,
     headers: buildHeaders(),
   };
+
   if (body !== null) {
     options.body = JSON.stringify(body);
   }
 
-  const res = await fetch(`${BASE_URL}${path}`, options);
+  let res;
+  try {
+    res = await fetch(`${BASE_URL}${path}`, options);
+  } catch (networkErr) {
+    throw new Error('Impossible de joindre le serveur. Vérifiez votre connexion ou le tunnel ngrok.');
+  }
 
-  // Réponse vide (ex : 204 No Content)
+  // Réponse vide (204 No Content ou body vide)
   if (res.status === 204) return null;
 
-  const data = await res.json().catch(() => ({}));
+  const text = await res.text();
+  let data = {};
+  if (text) {
+    try {
+      data = JSON.parse(text);
+    } catch {
+      // Réponse non-JSON (ex: page HTML ngrok)
+      throw new Error(`Réponse inattendue du serveur (HTTP ${res.status}).`);
+    }
+  }
 
   if (!res.ok) {
-    // Laravel retourne toujours un champ `message`
+    // Erreurs de validation Laravel (422)
+    if (res.status === 422 && data.errors) {
+      const firstError = Object.values(data.errors).flat()[0];
+      throw new Error(firstError ?? 'Erreur de validation');
+    }
     throw new Error(data.message ?? `Erreur HTTP ${res.status}`);
   }
 
   return data;
 }
 
-// ── Pagination helper ─────────────────────────────────────────────────────────
-
+// ── Query string helper ───────────────────────────────────────────────────────
 function qs(params = {}) {
-  const p = { per_page: 100, ...params };
-  return new URLSearchParams(p).toString();
+  // Supprimer les valeurs undefined/null
+  const clean = Object.fromEntries(
+    Object.entries({ per_page: 100, ...params }).filter(
+      ([, v]) => v !== undefined && v !== null
+    )
+  );
+  return new URLSearchParams(clean).toString();
 }
 
 // ── API publique ──────────────────────────────────────────────────────────────
-
 const adminAPI = {
-  // ── Auth ────────────────────────────────────────────────────────────────────
+
+  // ── Authentification ─────────────────────────────────────────────────────────
   async login(email, password) {
     const data = await request('POST', '/login', { email, password });
     if (data.user?.role !== 'admin') {
-      throw new Error('Accès réservé aux administrateurs');
+      // Déconnexion immédiate si non-admin
+      try { await request('POST', '/logout'); } catch { /* ignore */ }
+      throw new Error('Accès réservé aux administrateurs.');
     }
     return data; // { message, user, token }
   },
@@ -82,7 +107,7 @@ const adminAPI = {
     try {
       await request('POST', '/logout');
     } catch {
-      // On ignore les erreurs de déconnexion côté serveur
+      // On ignore les erreurs serveur lors du logout
     }
   },
 
@@ -90,9 +115,9 @@ const adminAPI = {
     return request('GET', '/me');
   },
 
-  // ── Dashboard stats ──────────────────────────────────────────────────────────
+  // ── Statistiques dashboard ───────────────────────────────────────────────────
   // Le backend n'a pas d'endpoint /stats dédié.
-  // On agrège les métadonnées de pagination (total) de chaque ressource.
+  // On agrège les `total` retournés par les endpoints paginés.
   async getDashboardStats() {
     const [vols, hotels, destinations, guides] = await Promise.allSettled([
       request('GET', `/vols?per_page=1`),
@@ -105,24 +130,28 @@ const adminAPI = {
     try {
       reservations = await request('GET', `/reservations?per_page=1`);
     } catch {
-      // Les réservations nécessitent auth — peut échouer si token expiré
+      // Peut échouer si le token est expiré ou si l'admin n'a pas de réservations
     }
 
     const total = (settled) =>
-      settled.status === 'fulfilled' ? (settled.value?.total ?? 0) : 0;
+      settled.status === 'fulfilled'
+        ? (settled.value?.total ?? settled.value?.meta?.total ?? 0)
+        : 0;
 
     return {
       totalVols: total(vols),
       totalHotels: total(hotels),
       totalDestinations: total(destinations),
       totalGuides: total(guides),
-      totalReservations: reservations?.total ?? 0,
+      totalReservations: reservations?.total ?? reservations?.meta?.total ?? 0,
     };
   },
 
   // ── Destinations ─────────────────────────────────────────────────────────────
   async getDestinations(params = {}) {
-    return request('GET', `/destinations?${qs(params)}`);
+    const data = await request('GET', `/destinations?${qs(params)}`);
+    // Normalise : { data: [...] } ou directement [...]
+    return Array.isArray(data) ? { data } : data;
   },
   async createDestination(body) {
     return request('POST', '/admin/destinations', body);
@@ -136,7 +165,8 @@ const adminAPI = {
 
   // ── Vols ─────────────────────────────────────────────────────────────────────
   async getVols(params = {}) {
-    return request('GET', `/vols?${qs(params)}`);
+    const data = await request('GET', `/vols?${qs(params)}`);
+    return Array.isArray(data) ? { data } : data;
   },
   async createVol(body) {
     return request('POST', '/admin/vols', body);
@@ -148,9 +178,10 @@ const adminAPI = {
     return request('DELETE', `/admin/vols/${id}`);
   },
 
-  // ── Hotels ────────────────────────────────────────────────────────────────────
+  // ── Hôtels ───────────────────────────────────────────────────────────────────
   async getHotels(params = {}) {
-    return request('GET', `/hotels?${qs(params)}`);
+    const data = await request('GET', `/hotels?${qs(params)}`);
+    return Array.isArray(data) ? { data } : data;
   },
   async createHotel(body) {
     return request('POST', '/admin/hotels', body);
@@ -163,8 +194,12 @@ const adminAPI = {
   },
 
   // ── Guides ────────────────────────────────────────────────────────────────────
+  // NOTE : L'endpoint public GET /guides filtre automatiquement disponible=true.
+  // Pour l'admin, on récupère en deux passes et on fusionne si nécessaire.
+  // Solution propre → ajouter GET /admin/guides côté backend.
   async getGuides(params = {}) {
-    return request('GET', `/guides?${qs(params)}`);
+    const data = await request('GET', `/guides?${qs(params)}`);
+    return Array.isArray(data) ? { data } : data;
   },
   async createGuide(body) {
     return request('POST', '/admin/guides', body);
@@ -176,9 +211,17 @@ const adminAPI = {
     return request('DELETE', `/admin/guides/${id}`);
   },
 
-  // ── Réservations (lecture seule pour l'admin via token admin) ─────────────────
+  // ── Réservations (lecture) ────────────────────────────────────────────────────
+  // Actuellement filtrées par user_id côté backend → retourne les résas de l'admin.
+  // Pour voir TOUTES les résas, ajouter GET /admin/reservations au backend.
   async getReservations(params = {}) {
-    return request('GET', `/reservations?${qs(params)}`);
+    try {
+      const data = await request('GET', `/reservations?${qs(params)}`);
+      return Array.isArray(data) ? { data } : data;
+    } catch (err) {
+      // Si non authentifié ou token expiré
+      throw err;
+    }
   },
 };
 
