@@ -116,9 +116,14 @@ class ReservationService
             Seat::where('reservation_id', $reservation->id)
                 ->update(['statut' => 'disponible', 'reservation_id' => null, 'bloque_jusqu_a' => null]);
 
-            // Réincrémenter
-            $reservation->vol->increment('places_disponibles', $reservation->nombre_personnes);
-            $reservation->volRetour?->increment('places_disponibles', $reservation->nombre_personnes);
+            // BUG 1 FIX: compter uniquement les passagers non-bébés,
+            // car les bébés n'ont jamais eu de siège décrémenté à la création.
+            $nonBebes = $reservation->passengers()
+                ->where('type_passager', '!=', 'bebe')
+                ->count();
+
+            $reservation->vol->increment('places_disponibles', $nonBebes);
+            $reservation->volRetour?->increment('places_disponibles', $nonBebes);
 
             $reservation->update(['statut' => 'annulee']);
         });
