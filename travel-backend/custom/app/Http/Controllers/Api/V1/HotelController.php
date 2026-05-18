@@ -3,13 +3,17 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Http\Resources\HotelResource;
 use App\Models\Hotel;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class HotelController extends Controller
 {
-    public function index(Request $request): JsonResponse
+    /**
+     * FIX: HotelResource::collection() → prix_nuit retourné comme float.
+     */
+    public function index(Request $request)
     {
         $query = Hotel::with('destination');
 
@@ -29,12 +33,11 @@ class HotelController extends Controller
             ->orderBy('etoiles', 'desc')
             ->paginate($request->integer('per_page', 15));
 
-        return response()->json($hotels);
+        return HotelResource::collection($hotels);
     }
 
     public function store(Request $request): JsonResponse
     {
-        // BUG 3 FIX: validate instead of $request->all()
         $hotel = Hotel::create($request->validate([
             'nom'            => 'required|string|max:255',
             'destination_id' => 'required|exists:destinations,id',
@@ -48,18 +51,19 @@ class HotelController extends Controller
 
         return response()->json([
             'message' => 'Hôtel créé avec succès',
-            'hotel'   => $hotel->load('destination'),
+            'hotel'   => new HotelResource($hotel->load('destination')),
         ], 201);
     }
 
     public function show(Hotel $hotel): JsonResponse
     {
-        return response()->json($hotel->load('destination'));
+        return response()->json(
+            new HotelResource($hotel->load('destination'))
+        );
     }
 
     public function update(Request $request, Hotel $hotel): JsonResponse
     {
-        // BUG 3 FIX: validate instead of $request->all()
         $hotel->update($request->validate([
             'nom'            => 'sometimes|string|max:255',
             'destination_id' => 'sometimes|exists:destinations,id',
@@ -73,7 +77,7 @@ class HotelController extends Controller
 
         return response()->json([
             'message' => 'Hôtel mis à jour',
-            'hotel'   => $hotel->load('destination'),
+            'hotel'   => new HotelResource($hotel->load('destination')),
         ]);
     }
 

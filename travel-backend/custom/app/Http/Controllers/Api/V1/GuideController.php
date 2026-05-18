@@ -3,14 +3,17 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Http\Resources\GuideResource;
 use App\Models\Guide;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class GuideController extends Controller
 {
-    /** Liste publique — guides disponibles uniquement. */
-    public function index(Request $request): JsonResponse
+    /**
+     * FIX: GuideResource::collection() → tarif_jour retourné comme float.
+     */
+    public function index(Request $request)
     {
         $query = Guide::with('destination');
 
@@ -26,14 +29,10 @@ class GuideController extends Controller
             ->orderBy('experience_annees', 'desc')
             ->paginate($request->integer('per_page', 15));
 
-        return response()->json($guides);
+        return GuideResource::collection($guides);
     }
 
-    /**
-     * BUG 4 FIX — Liste admin : tous les guides, y compris les indisponibles.
-     * Accessible uniquement via le groupe de routes admin.
-     */
-    public function indexAdmin(Request $request): JsonResponse
+    public function indexAdmin(Request $request)
     {
         $query = Guide::with('destination');
 
@@ -52,7 +51,7 @@ class GuideController extends Controller
         $guides = $query->orderBy('experience_annees', 'desc')
             ->paginate($request->integer('per_page', 15));
 
-        return response()->json($guides);
+        return GuideResource::collection($guides);
     }
 
     public function store(Request $request): JsonResponse
@@ -70,13 +69,15 @@ class GuideController extends Controller
 
         return response()->json([
             'message' => 'Guide créé avec succès',
-            'guide'   => $guide->load('destination'),
+            'guide'   => new GuideResource($guide->load('destination')),
         ], 201);
     }
 
     public function show(Guide $guide): JsonResponse
     {
-        return response()->json($guide->load('destination'));
+        return response()->json(
+            new GuideResource($guide->load('destination'))
+        );
     }
 
     public function update(Request $request, Guide $guide): JsonResponse
@@ -85,7 +86,7 @@ class GuideController extends Controller
 
         return response()->json([
             'message' => 'Guide mis à jour',
-            'guide'   => $guide->load('destination'),
+            'guide'   => new GuideResource($guide->load('destination')),
         ]);
     }
 

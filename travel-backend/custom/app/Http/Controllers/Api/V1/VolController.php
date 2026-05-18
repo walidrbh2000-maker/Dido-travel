@@ -10,7 +10,12 @@ use Illuminate\Http\Request;
 
 class VolController extends Controller
 {
-    public function index(Request $request): JsonResponse
+    /**
+     * FIX: utilise VolResource::collection() pour garantir que tous les
+     * champs numériques (prix decimal:2) sont retournés comme float et non
+     * comme string PHP — évite le TypeError côté Flutter.
+     */
+    public function index(Request $request)
     {
         $query = Vol::with('destination');
 
@@ -34,12 +39,14 @@ class VolController extends Controller
             ->orderBy('date_depart')
             ->paginate($request->integer('per_page', 15));
 
-        return response()->json($vols);
+        // Retourne une AnonymousResourceCollection → Laravel la sérialise
+        // en { "data": [...], "links": {...}, "meta": {...} }
+        // Flutter lit response.data['data'] ✓
+        return VolResource::collection($vols);
     }
 
     public function store(Request $request): JsonResponse
     {
-        // BUG 3 FIX: validate instead of $request->all()
         $vol = Vol::create($request->validate([
             'compagnie'          => 'required|string|max:255',
             'numero_vol'         => 'required|string|max:255',
@@ -65,7 +72,6 @@ class VolController extends Controller
 
     public function update(Request $request, Vol $vol): JsonResponse
     {
-        // BUG 3 FIX: validate instead of $request->all()
         $vol->update($request->validate([
             'compagnie'          => 'sometimes|string|max:255',
             'numero_vol'         => 'sometimes|string|max:255',
